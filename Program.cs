@@ -22,6 +22,7 @@ class Program
     //static Particle[] particles;
     static void Main(string[] args)
     {
+        //Console.WriteLine(args[2]);
         if(args.Length == 2 && args[1] == "g")
         {
             Console.WriteLine(allowedChars.Length);
@@ -42,49 +43,7 @@ class Program
 
             string text = File.ReadAllText(inputPath);
 
-            text = text
-                .Replace("0", "1o")
-                .Replace("1", "1e")
-                .Replace("2", "1t")
-                .Replace("3", "1r")
-                .Replace("4", "1f")
-                .Replace("5", "1m")
-                .Replace("6", "1s")
-                .Replace("7", "1y")
-                .Replace("8", "1å")
-                .Replace("9", "1n");
-
-                //1o 1e 1t 1r 1f 1m 1s 1y 1å 1n
-
-            text = text
-                .Replace("\r\n", "1N")  // Windows newlines first (before \n)
-                .Replace("\n", "1N")    // Unix newlines
-                .Replace("\t", "1T")    // example: tabs
-                .Replace("!", "1u")    // example: tabs
-                .Replace("?", "1q")    // example: tabs
-                .Replace(",", "1k")
-                .Replace(":", "1K")
-                .Replace(";", "1S")
-                .Replace("-", "1b")
-                .Replace("“", "1l")
-                .Replace("”", "1R")
-                .Replace("’", "1a")
-                .Replace(")", "2P")
-                .Replace("(", "2p")
-                .Replace("{", "2c")
-                .Replace("}", "2C")
-                .Replace("[", "2q")
-                .Replace("]", "2Q")
-
-                .Replace("ß", "3S");
-
-            text = text
-                .Replace("Æ", "5")
-                .Replace("Ø", "6")
-                .Replace("Å", "7")
-                .Replace("æ", "8")
-                .Replace("ø", "9")
-                .Replace("å", "0");
+            text = turnto64(text);
 
             //Console.WriteLine(text);
 
@@ -203,7 +162,7 @@ class Program
 
             Console.WriteLine($"Output written to {outputPath}");
 
-        } else if (args.Length == 2 && args[1] == "i")
+        } else if (args.Length == 3 && args[1] == "e")
         {
             string json = File.ReadAllText(args[0]);
 
@@ -223,23 +182,108 @@ class Program
                     prop => prop.Value.EnumerateArray().Select(e => e.GetInt32()).ToArray()
                 );
 
-            string seed = "bra";
-            int steps = 20;
-            string current = "" + seed[seed.Length - 2] + seed[seed.Length - 1]; // last 2 chars = "na"
-
-            Console.Write(seed);
-            for (int i = 0; i < steps; i++)
+            Dictionary<string, int> comboIndex = new Dictionary<string, int>();
+            for (int i = 0; i < combos.Count; i++)
             {
-                if (!sortedFollowing.ContainsKey(current))
-                    break;
-
-                int nextIndex = sortedFollowing[current][0]; // [0] = most likely follower
-                string next = combos[nextIndex];
-
-                Console.Write(next[0]); // only write the second char to avoid overlap
-                Console.Write(next[1]); // only write the second char to avoid overlap
-                current = next;
+                comboIndex[combos[i]] = i;
             }
+            string inputPath = args[2];
+
+            if (!File.Exists(inputPath))
+            {
+                Console.WriteLine("File not found.");
+                return;
+            }
+
+            string encodeTxt = File.ReadAllText(inputPath);
+            encodeTxt = turnto64(encodeTxt);
+            if (encodeTxt.Length % 2 == 1)
+            {
+                encodeTxt+="1";
+            }
+
+            int[] outarr = new int[(encodeTxt.Length/2)];
+
+            string beginnerStr = "" + encodeTxt[0] + encodeTxt[1];
+
+
+            outarr[0] = comboIndex[beginnerStr];
+            int outarrIndex = 1;
+
+            string prev = beginnerStr;
+
+            for (int i = 2; i < encodeTxt.Length; i+=2)
+            {
+                string current = ""+encodeTxt[i]+encodeTxt[i+1];
+                int comboI = comboIndex[current];
+                int index = Array.IndexOf(sortedFollowing[prev], comboI);
+                outarr[outarrIndex] = index;
+                prev = current;
+                outarrIndex ++;
+            }
+
+            string outputPath = Path.ChangeExtension(inputPath, "_encoded.txt");
+            File.WriteAllText(outputPath, string.Join("\n", outarr));
+            Console.WriteLine($"Output written to {outputPath}");
+
+        }
+        else if (args.Length == 3 && args[1] == "d")
+        {
+            string json = File.ReadAllText(args[0]);
+
+            JsonDocument doc = JsonDocument.Parse(json);
+
+            List<string> combos = doc.RootElement
+                .GetProperty("combos")
+                .EnumerateArray()
+                .Select(e => e.GetString())
+                .ToList();
+
+            Dictionary<string, int[]> sortedFollowing = doc.RootElement
+                .GetProperty("sortedFollowing")
+                .EnumerateObject()
+                .ToDictionary(
+                    prop => prop.Name,
+                    prop => prop.Value.EnumerateArray().Select(e => e.GetInt32()).ToArray()
+                );
+
+            Dictionary<string, int> comboIndex = new Dictionary<string, int>();
+            for (int i = 0; i < combos.Count; i++)
+            {
+                comboIndex[combos[i]] = i;
+            }
+            string inputPath = args[2];
+
+            if (!File.Exists(inputPath))
+            {
+                Console.WriteLine("File not found.");
+                return;
+            }
+
+            int[] arr = File.ReadAllLines(inputPath).Select(int.Parse).ToArray();
+
+
+            string outstring = "";
+            outstring += combos[arr[0]];
+            int prevComboIndex = arr[0];
+
+            for (int i = 1; i < arr.Length; i++)
+            {
+                int nextComboIndex = sortedFollowing[combos[prevComboIndex]][arr[i]];
+                outstring += combos[nextComboIndex];
+                prevComboIndex = nextComboIndex;
+            }
+
+            if (outstring[outstring.Length-1] == 1)
+            {
+                outstring = outstring[..^1];
+            }
+
+            outstring = turnBack(outstring);
+
+            string outputPath = Path.ChangeExtension(inputPath, "_decoded.txt");
+            File.WriteAllText(outputPath, outstring);
+            Console.WriteLine($"Output written to {outputPath}");
         }
 
 
@@ -336,5 +380,103 @@ class Program
         //image.SaveAsPng(outputPath);
         //Console.WriteLine($"Saved to {outputPath}");
 
+    }
+
+    public static string turnto64(string str)
+    {
+
+        //note 11 er ikke gyldig på grunn av end-of-file spacing.
+        string text = str;
+        text = text
+            .Replace("0", "1o")
+            .Replace("1", "1e")
+            .Replace("2", "1t")
+            .Replace("3", "1r")
+            .Replace("4", "1f")
+            .Replace("5", "1m")
+            .Replace("6", "1s")
+            .Replace("7", "1y")
+            .Replace("8", "1å")
+            .Replace("9", "1n");
+
+            //1o 1e 1t 1r 1f 1m 1s 1y 1å 1n
+
+        text = text
+            .Replace("\r\n", "1N")  // Windows newlines first (before \n)
+            .Replace("\n", "1N")    // Unix newlines
+            .Replace("\t", "1T")    // example: tabs
+            .Replace("!", "1u")    // example: tabs
+            .Replace("?", "1q")    // example: tabs
+            .Replace(",", "1k")
+            .Replace(":", "1K")
+            .Replace(";", "1S")
+            .Replace("-", "1b")
+            .Replace("“", "1l")
+            .Replace("”", "1R")
+            .Replace("’", "1a")
+            .Replace(")", "2P")
+            .Replace("(", "2p")
+            .Replace("{", "2c")
+            .Replace("}", "2C")
+            .Replace("[", "2q")
+            .Replace("]", "2Q")
+
+            .Replace("ß", "3S");
+
+        text = text
+            .Replace("Æ", "5")
+            .Replace("Ø", "6")
+            .Replace("Å", "7")
+            .Replace("æ", "8")
+            .Replace("ø", "9")
+            .Replace("å", "0");
+        return text;
+    }
+    public static string turnBack(string str)
+    {
+        string text = str;
+
+        text = text
+            .Replace("5", "Æ")
+            .Replace("6", "Ø")
+            .Replace("7", "Å")
+            .Replace("8", "æ")
+            .Replace("9", "ø")
+            .Replace("0", "å");
+
+        text = text
+            .Replace("1N", "\r\n")  // Windows newlines first (before \n)
+            .Replace("1N", "\n")    // Unix newlines
+            .Replace("1T", "\t")    // example: tabs
+            .Replace("1u", "!")    // example: tabs
+            .Replace("1q", "?")    // example: tabs
+            .Replace("1k", ",")
+            .Replace("1K", ":")
+            .Replace("1S", ";")
+            .Replace("1b", "-")
+            .Replace("1l", "“")
+            .Replace("1R", "”")
+            .Replace("1a", "’")
+            .Replace("2P", ")")
+            .Replace("2p", "(")
+            .Replace("2c", "{")
+            .Replace("2C", "}")
+            .Replace("2q", "[")
+            .Replace("2Q", "]")
+
+            .Replace("3S", "ß");
+
+        text = text
+            .Replace("1o", "0")
+            .Replace("1e", "1")
+            .Replace("1t", "2")
+            .Replace("1r", "3")
+            .Replace("1f", "4")
+            .Replace("1m", "5")
+            .Replace("1s", "6")
+            .Replace("1y", "7")
+            .Replace("1å", "8")
+            .Replace("1n", "9");
+        return text;
     }
 }
