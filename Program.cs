@@ -14,10 +14,10 @@ using System.Text.Json;
 class Program
 {
     static string allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ567abcdefghijklmnopqrstuvwxyz890. 1234";
-    //static int ExportWidth = 250;
-    //static int ExportHeight = 250;
-    //static string outputPath = "test1.png";
-    //static Image<Rgba32> image = new Image<Rgba32>(ExportWidth, ExportHeight);
+    static int ExportWidth = 250;
+    static int ExportHeight = 250;
+    static string outputPath = "test1.png";
+    static Image<Rgba32> image = new Image<Rgba32>(ExportWidth, ExportHeight);
     //public static Camera cam = new Camera(new Vector3(0,0,40),MathF.PI,0,0);
     //static Particle[] particles;
     static void Main(string[] args)
@@ -284,6 +284,71 @@ class Program
             string outputPath = Path.ChangeExtension(inputPath, "_decoded.txt");
             File.WriteAllText(outputPath, outstring);
             Console.WriteLine($"Output written to {outputPath}");
+        }
+        else if (args.Length == 2 && args[0] == "i")
+        {
+            string inputPath = args[1];
+
+            if (!File.Exists(inputPath))
+            {
+                Console.WriteLine("File not found.");
+                return;
+            }
+
+            int[] arr = File.ReadAllLines(inputPath).Select(int.Parse).ToArray();
+
+            for (int y = 0; y < ExportHeight; y++)
+            {
+                for (int x = 0; x < ExportWidth; x++)
+                {
+                    image[x, y] = new Rgba32(
+                        r: 0,
+                        g: 0,
+                        b: 0,
+                        a: 255                         // fully opaque
+                    );
+                }
+            }
+
+            for (int i = 0; i < arr.Length; i+=2)
+            {
+                if (arr[i] < 0 || arr[i] > 4095)
+                {
+                    Console.WriteLine("error, number outside of 0-4095");
+                    Console.WriteLine(arr[i]);
+                    Console.WriteLine("exiting");
+                    return;
+                }
+                string hex1 = arr[i].ToString("X3");
+
+                if (arr[i+1] < 0 || arr[i+1] > 4095)
+                {
+                    Console.WriteLine("error, number outside of 0-4095");
+                    Console.WriteLine(arr[i+1]);
+                    Console.WriteLine("exiting");
+                    return;
+                }
+                string hex2 = arr[i+1].ToString("X3");
+
+                string Rstring = ""+ hex1[0]+hex1[1];
+                string Gstring = ""+ hex1[2]+hex2[0];
+                string Bstring = ""+ hex2[1]+hex2[2];
+
+                int r = Convert.ToInt32(Rstring, 16);
+                int g = Convert.ToInt32(Gstring, 16);
+                int b = Convert.ToInt32(Bstring, 16);
+
+                image[i/2, 0] = new Rgba32(
+                        r: (byte)r,
+                        g: (byte)g,
+                        b: (byte)b,
+                        a: 255
+                    );
+                
+            }
+
+            image.SaveAsPng(outputPath);
+            Console.WriteLine($"Saved to {outputPath}");
         }
 
 
